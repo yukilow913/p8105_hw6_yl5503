@@ -1,0 +1,6 @@
+---
+title: "P8105 HW 6"
+author: "Yuki Low (yl5503)"
+date: "11/27/2023"
+output: github_document
+---
