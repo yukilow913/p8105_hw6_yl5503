@@ -15,6 +15,8 @@ library(purrr)
 library(broom)
 ```
 
+2) 
+
 Importing the weather dataframe
 ```{r, message = FALSE}
 weather_df = 
@@ -103,7 +105,7 @@ library(knitr)
 library(MASS)
 ```
 
-2. 
+3. 
 Importing the dataset needed and cleaning the data by changing variable types 
 ```{r, message = FALSE}
 birthweight_df = 
