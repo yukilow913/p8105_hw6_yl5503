@@ -5,7 +5,7 @@ date: "11/27/2023"
 output: github_document
 ---
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 library(dplyr)
 library(broom)
 library(ggplot2)
@@ -16,7 +16,7 @@ library(broom)
 ```
 
 Importing the weather dataframe
-```{r}
+```{r, message = FALSE}
 weather_df = 
   rnoaa::meteo_pull_monitors(
     c("USW00094728"),
@@ -45,8 +45,6 @@ bootstrap =
   select(results, rsquared) %>% unnest(rsquared) %>%
   select(results, r.squared) %>% unnest(results) %>%
   select(term, estimate, r.squared) 
-
-bootstrap
 ```
 
 Plotting the distribution of $R^2$
@@ -72,7 +70,7 @@ r_squared_CI
 We are 95% confident that our true r-squared value falls in between the interval (`r r_squared_CI[1]`, `r r_squared_CI[2]`)
 
 Distribution of $log(\beta_1 * \beta_2)$
-```{r}
+```{r, warning = FALSE}
 bootstrap %>%
   pivot_wider(names_from = term, values_from = estimate) %>% 
   rename(beta_1 = tmin, 
@@ -84,7 +82,7 @@ bootstrap %>%
 The distribution of our $log(\beta_1 * \beta_2)$ terms is skewed to the left. 
 
 
-```{r}
+```{r, warning = FALSE}
 log_beta1_beta2_CI <- bootstrap %>%
   pivot_wider(names_from = term, values_from = estimate) %>% 
   rename(beta_1 = tmin, 
@@ -99,15 +97,15 @@ log_beta1_beta2_CI
 
 We are 95% confident that our true $log(\beta_1 * \beta_2)$ value falls in between the interval (`r log_beta1_beta2_CI[1]`, `r log_beta1_beta2_CI[2]`)
 
-```{r}
+```{r, message = FALSE}
 library(readr)
 library(knitr)
 library(MASS)
 ```
 
 2. 
-Importing the dataset needed 
-```{r}
+Importing the dataset needed and cleaning the data by changing variable types 
+```{r, message = FALSE}
 birthweight_df = 
   read_csv("./birthweight.csv") %>%
   janitor::clean_names() %>% 
@@ -123,16 +121,14 @@ birthweight_df =
                        "puerto rican" = "4", "other" = "8")
 )
 
-
-birthweight_df
 ```
 
-
-```{r}
+Created 3 different models: 1 was mine and 2 were specified by the problem set instructions. Then, I plotted the residuals vs fitted values for each of the models. 
+```{r, warning = FALSE}
 model_mine <- lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks +
                malform + menarche + mheight + momage + mrace + parity +
                pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = birthweight_df)
-summary(model_mine)
+model_mine %>% tidy() %>% kable()
 
 birthweight_df %>%  
   add_predictions(model_mine) %>% 
@@ -144,7 +140,8 @@ birthweight_df %>%
        y = "Residuals")
   
 model_1 <- lm(bwt~ blength + gaweeks, data = birthweight_df) 
-summary(model_1)
+model_1 %>% tidy() %>% kable()
+
 
 birthweight_df %>%  
   add_predictions(model_1) %>% 
@@ -156,7 +153,7 @@ birthweight_df %>%
        y = "Residuals")
 
 model_2 <- lm(bwt~ bhead * blength * babysex, data = birthweight_df)
-summary(model_2)
+model_2 %>% tidy() %>% kable()
 
 birthweight_df %>%  
   add_predictions(model_2) %>% 
@@ -166,4 +163,53 @@ birthweight_df %>%
   labs(title = "Residuals vs. Fitted Values for Model 2 ", 
        x = "Fitted",
        y = "Residuals")
+```
+
+I performed cross validation on each of the models. 
+```{r, warning = FALSE}
+cv_df <-
+  birthweight_df %>% 
+  crossv_mc(n = 100) %>% 
+  mutate(
+    train = map(train, as_tibble), 
+    test = map(test, as_tibble))
+
+cv_comp <-
+cv_df %>% 
+  mutate(
+    model_mine  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks +
+               malform + menarche + mheight + momage + mrace + parity +
+               pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = .x)),
+    model_1  = map(train, ~lm(bwt ~ gaweeks + blength, data = .x)),
+    model_2  = map(train, ~lm(bwt ~ bhead*blength*babysex, data = .x))) %>% 
+  mutate(
+    rmse_mine = map2_dbl(model_mine, test, ~rmse(model = .x, data = .y)),
+    rmse_1  = map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
+    rmse_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = .y))) %>% 
+  summarize(
+    avg_rmse_model_mine = mean(rmse_mine),
+    avg_rmse_model_1 = mean(rmse_1),
+    avg_rmse_model_2 = mean(rmse_2))
+
+cv_comp
+```
+The average RMSE for my model was 274.4954 compared to the first model which had an average RMSE of 334.7634	and the second model which had an average RMSE of 289.9159. 
+
+```{r, warning = FALSE}
+cv_df %>% 
+  mutate(model_mine  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks +
+               malform + menarche + mheight + momage + mrace + parity +
+               pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = .x)),
+         model_comp_1  = map(train, ~lm(bwt ~ gaweeks + blength, data = .x)),
+         model_comp_2  = map(train, ~lm(bwt ~ bhead*blength*babysex, data = .x))) %>% 
+  mutate(rmse_mine = map2_dbl(model_mine, test, ~rmse(model = .x, data = .y)),
+         rmse_comp_1  = map2_dbl(model_comp_1, test, ~rmse(model = .x, data = .y)),
+         rmse_comp_2 = map2_dbl(model_comp_2, test, ~rmse(model = .x, data = .y))) %>%
+  dplyr::select(rmse_mine, rmse_comp_1, rmse_comp_2) %>%  
+  pivot_longer(everything(),
+               names_to = "model", 
+               values_to = "rmse",
+               names_prefix = "rmse_") %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin(aes(fill = model))
 ```
