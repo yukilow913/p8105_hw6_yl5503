@@ -4,3 +4,97 @@ author: "Yuki Low (yl5503)"
 date: "11/27/2023"
 output: github_document
 ---
+
+```{r}
+library(dplyr)
+library(broom)
+library(ggplot2)
+library(modelr)
+library(tidyr)
+library(purrr)
+library(broom)
+```
+
+Importing the weather dataframe
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2022-01-01",
+    date_max = "2022-12-31") |>
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) |>
+  select(name, id, everything())
+```
+
+We set the seed to maintain consistency and start bootstrapping 5000 samples. We want the estimate for the intercept and both of our variables `tmin` and `prcp`. We also want the r-squared value that is calculated from each model obtained. 
+
+```{r, warning = FALSE}
+set.seed(123)
+
+bootstrap =
+  weather_df %>%
+  bootstrap(n = 5000) %>%
+  mutate(
+    models = map(strap, \(df) lm(tmax ~ tmin + prcp, data = df)),
+    results = map(models, tidy),
+    rsquared = map(models,glance)) %>%
+  select(results, rsquared) %>% unnest(rsquared) %>%
+  select(results, r.squared) %>% unnest(results) %>%
+  select(term, estimate, r.squared) 
+
+bootstrap
+```
+
+Plotting the distribution of $R^2$
+```{r}
+bootstrap %>%
+  filter(term == "(Intercept)") %>%
+  ggplot(aes(x = r.squared)) +
+  geom_density()
+```
+From looking at the distribution of R-squared values, it can be seen that there is a slight left skew. 
+
+Calculating the confidence interval for R-squared value. 
+```{r}
+r_squared_CI <-
+  bootstrap %>%
+  filter(term == "(Intercept)") %>%
+  select(r.squared) %>%
+  summarize(ci_lower = quantile(r.squared, 0.025), 
+            ci_upper = quantile(r.squared, 0.975))
+
+r_squared_CI
+```
+We are 95% confident that our true r-squared value falls in between the interval (`r r_squared_CI[1]`, `r r_squared_CI[2]`)
+
+Distribution of $log(\beta_1 * \beta_2)$
+```{r}
+bootstrap %>%
+  pivot_wider(names_from = term, values_from = estimate) %>% 
+  rename(beta_1 = tmin, 
+         beta_2 = prcp) %>% 
+  mutate(log_beta1_beta2 = log(beta_1 * beta_2)) %>% 
+  ggplot(aes(x = log_beta1_beta2)) + 
+  geom_density()
+```
+The distribution of our $log(\beta_1 * \beta_2)$ terms is skewed to the left. 
+
+
+```{r}
+log_beta1_beta2_CI <- bootstrap %>%
+  pivot_wider(names_from = term, values_from = estimate) %>% 
+  rename(beta_1 = tmin, 
+         beta_2 = prcp) %>% 
+  mutate(log_b1_b2 = log(beta_1 * beta_2)) %>%
+  summarize(ci_lower = quantile(log_b1_b2, 0.025, na.rm = T), 
+            ci_upper = quantile(log_b1_b2, 0.975, na.rm = T), 
+            NA_count = sum(is.na(log_b1_b2)))
+            
+log_beta1_beta2_CI
+```
+
+We are 95% confident that our true $log(\beta_1 * \beta_2)$ value falls in between the interval (`r log_beta1_beta2_CI[1]`, `r log_beta1_beta2_CI[2]`)
