@@ -98,3 +98,72 @@ log_beta1_beta2_CI
 ```
 
 We are 95% confident that our true $log(\beta_1 * \beta_2)$ value falls in between the interval (`r log_beta1_beta2_CI[1]`, `r log_beta1_beta2_CI[2]`)
+
+```{r}
+library(readr)
+library(knitr)
+library(MASS)
+```
+
+2. 
+Importing the dataset needed 
+```{r}
+birthweight_df = 
+  read_csv("./birthweight.csv") %>%
+  janitor::clean_names() %>% 
+  mutate(
+  babysex = factor(babysex), 
+  babysex = recode_factor(babysex, "male" = "1", "female" = "2"), 
+  frace = factor(frace), 
+  frace = recode_factor(frace, "white" = "1", "black" = "2", "asian" = "3", 
+                       "puerto rican" = "4", "other" = "8", "unknown" = "9"), 
+  malform = factor(malform), 
+  mrace = factor(mrace), 
+  mrace = recode_factor(frace, "white" = "1", "black" = "2", "asian" = "3", 
+                       "puerto rican" = "4", "other" = "8")
+)
+
+
+birthweight_df
+```
+
+
+```{r}
+model_mine <- lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks +
+               malform + menarche + mheight + momage + mrace + parity +
+               pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = birthweight_df)
+summary(model_mine)
+
+birthweight_df %>%  
+  add_predictions(model_mine) %>% 
+  add_residuals(model_mine) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() +
+  labs(title = "Residuals vs. Fitted Values for My Model ", 
+       x = "Fitted",
+       y = "Residuals")
+  
+model_1 <- lm(bwt~ blength + gaweeks, data = birthweight_df) 
+summary(model_1)
+
+birthweight_df %>%  
+  add_predictions(model_1) %>% 
+  add_residuals(model_1) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() +
+  labs(title = "Residuals vs. Fitted Values for Model 1 ", 
+       x = "Fitted",
+       y = "Residuals")
+
+model_2 <- lm(bwt~ bhead * blength * babysex, data = birthweight_df)
+summary(model_2)
+
+birthweight_df %>%  
+  add_predictions(model_2) %>% 
+  add_residuals(model_2) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() +
+  labs(title = "Residuals vs. Fitted Values for Model 2 ", 
+       x = "Fitted",
+       y = "Residuals")
+```
